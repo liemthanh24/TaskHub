@@ -1,0 +1,24 @@
+from datetime import datetime, timezone
+from pydantic import BaseModel, Field
+
+
+class TaskCreate(BaseModel):
+    title: str
+    description: str | None = None
+    due_date: datetime | None = None
+
+
+class TaskUpdate(BaseModel):
+    title: str | None = None
+    description: str | None = None
+    due_date: datetime | None = None
+    completed: bool | None = None
+
+
+class Task(BaseModel):
+    id: int
+    title: str
+    description: str | None = None
+    due_date: datetime | None = None
+    completed: bool = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
