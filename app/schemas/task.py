@@ -2,6 +2,14 @@ from datetime import datetime, timezone
 from pydantic import BaseModel, Field
 
 
+class Page(BaseModel):
+    items: list
+    total: int
+    page: int
+    per_page: int
+    pages: int
+
+
 class TaskCreate(BaseModel):
     title: str
     description: str | None = None
