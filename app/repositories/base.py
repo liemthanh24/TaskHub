@@ -1,0 +1,70 @@
+import math
+from typing import Generic, TypeVar
+
+from sqlalchemy import select, func
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.models.base import Base
+from app.schemas.task import Page
+
+T = TypeVar("T", bound=Base)
+
+
+class BaseRepository(Generic[T]):
+    def __init__(self, session: AsyncSession, model: type[T]):
+        self.session = session
+        self.model = model
+
+    async def get(self, id: int) -> T | None:
+        return await self.session.get(self.model, id)
+
+    async def list(self, skip: int = 0, limit: int = 100) -> list[T]:
+        stmt = select(self.model).offset(skip).limit(limit)
+        result = await self.session.execute(stmt)
+        return list(result.scalars().all())
+
+    async def create(self, **data) -> T:
+        obj = self.model(**data)
+        self.session.add(obj)
+        await self.session.commit()
+        await self.session.refresh(obj)
+        return obj
+
+    async def update(self, id: int, **data) -> T | None:
+        obj = await self.session.get(self.model, id)
+        if not obj:
+            return None
+        for key, value in data.items():
+            if value is not None:
+                setattr(obj, key, value)
+        await self.session.commit()
+        await self.session.refresh(obj)
+        return obj
+
+    async def delete(self, id: int) -> bool:
+        obj = await self.session.get(self.model, id)
+        if not obj:
+            return False
+        await self.session.delete(obj)
+        await self.session.commit()
+        return True
+
+    async def paginate(self, page: int = 1, per_page: int = 10) -> Page:
+        total_stmt = select(func.count()).select_from(self.model)
+        total_result = await self.session.execute(total_stmt)
+        total = total_result.scalar() or 0
+
+        pages = max(1, math.ceil(total / per_page))
+        skip = (page - 1) * per_page
+
+        stmt = select(self.model).offset(skip).limit(per_page)
+        result = await self.session.execute(stmt)
+        items = result.scalars().all()
+
+        return Page(
+            items=list(items),
+            total=total,
+            page=page,
+            per_page=per_page,
+            pages=pages,
+        )

@@ -2,12 +2,15 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
 
+from app.database import engine, init_db
 from app.routers import health, tasks
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    await init_db()
     yield
+    await engine.dispose()
 
 
 app = FastAPI(title="TaskHub API", version="0.1.0", lifespan=lifespan)

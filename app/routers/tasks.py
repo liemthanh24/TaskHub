@@ -1,24 +1,39 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.dependencies import get_next_id, get_tasks_store
-from app.schemas.task import Task, TaskCreate, TaskUpdate
+from app.database import get_db
+from app.repositories.task import TaskRepository
+from app.schemas.task import Page, Task, TaskCreate, TaskUpdate
 
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 
+def get_repo(db: AsyncSession = Depends(get_db)) -> TaskRepository:
+    return TaskRepository(db)
+
+
 @router.get("/", response_model=list[Task])
 async def list_tasks(
-    store: dict = Depends(get_tasks_store),
+    repo: TaskRepository = Depends(get_repo),
 ):
-    return list(store.values())
+    return await repo.list()
+
+
+@router.get("/page", response_model=Page)
+async def paginate_tasks(
+    page: int = Query(1, ge=1),
+    per_page: int = Query(10, ge=1, le=100),
+    repo: TaskRepository = Depends(get_repo),
+):
+    return await repo.paginate(page, per_page)
 
 
 @router.get("/{task_id}", response_model=Task)
 async def get_task(
     task_id: int,
-    store: dict = Depends(get_tasks_store),
+    repo: TaskRepository = Depends(get_repo),
 ):
-    task = store.get(task_id)
+    task = await repo.get(task_id)
     if not task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
     return task
@@ -27,11 +42,9 @@ async def get_task(
 @router.post("/", response_model=Task, status_code=status.HTTP_201_CREATED)
 async def create_task(
     payload: TaskCreate,
-    store: dict = Depends(get_tasks_store),
-    next_id: int = Depends(get_next_id),
+    repo: TaskRepository = Depends(get_repo),
 ):
-    task = Task(id=next_id, **payload.model_dump())
-    store[task.id] = task.model_dump()
+    task = await repo.create(**payload.model_dump())
     return task
 
 
@@ -39,22 +52,19 @@ async def create_task(
 async def update_task(
     task_id: int,
     payload: TaskUpdate,
-    store: dict = Depends(get_tasks_store),
+    repo: TaskRepository = Depends(get_repo),
 ):
-    existing = store.get(task_id)
-    if not existing:
+    task = await repo.update(task_id, **payload.model_dump(exclude_unset=True))
+    if not task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
-
-    updated = existing | payload.model_dump(exclude_unset=True)
-    store[task_id] = updated
-    return Task(**updated)
+    return task
 
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_task(
     task_id: int,
-    store: dict = Depends(get_tasks_store),
+    repo: TaskRepository = Depends(get_repo),
 ):
-    if task_id not in store:
+    deleted = await repo.delete(task_id)
+    if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
-    del store[task_id]
