@@ -9,6 +9,7 @@ from alembic import context
 
 from app.models.base import Base
 from app.models.task import TaskModel
+from app.models.user import UserModel
 
 config = context.config
 
