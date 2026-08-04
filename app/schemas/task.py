@@ -1,9 +1,21 @@
 from datetime import datetime, timezone
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, ConfigDict, Field
+
+
+class Task(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    id: int
+    user_id: int
+    title: str
+    description: str | None = None
+    due_date: datetime | None = None
+    completed: bool = False
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 
 class Page(BaseModel):
-    items: list
+    items: list[Task]
     total: int
     page: int
     per_page: int
@@ -21,12 +33,3 @@ class TaskUpdate(BaseModel):
     description: str | None = None
     due_date: datetime | None = None
     completed: bool | None = None
-
-
-class Task(BaseModel):
-    id: int
-    title: str
-    description: str | None = None
-    due_date: datetime | None = None
-    completed: bool = False
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
