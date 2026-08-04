@@ -4,7 +4,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_asyn
 
 from app.database import AsyncSessionLocal, init_db
 from app.models.base import Base
+from app.models.user import UserModel
 from app.repositories.task import TaskRepository
+from app.repositories.user import UserRepository
 
 TEST_DATABASE_URL = "sqlite+aiosqlite:///./test_taskhub.db"
 
@@ -30,6 +32,13 @@ async def session():
         yield s
 
     await engine.dispose()
+
+
+@pytest_asyncio.fixture
+async def user_id(session: AsyncSession) -> int:
+    repo = UserRepository(session)
+    user = await repo.create(email="owner@example.com", hashed_password="x")
+    return user.id
 
 
 @pytest_asyncio.fixture

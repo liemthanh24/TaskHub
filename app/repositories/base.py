@@ -35,8 +35,7 @@ class BaseRepository(Generic[T]):
         if not obj:
             return None
         for key, value in data.items():
-            if value is not None:
-                setattr(obj, key, value)
+            setattr(obj, key, value)
         await self.session.commit()
         await self.session.refresh(obj)
         return obj
@@ -49,16 +48,19 @@ class BaseRepository(Generic[T]):
         await self.session.commit()
         return True
 
-    async def paginate(self, page: int = 1, per_page: int = 10) -> Page:
+    async def paginate(self, page: int = 1, per_page: int = 10, where=None) -> Page:
         total_stmt = select(func.count()).select_from(self.model)
+        items_stmt = select(self.model).offset((page - 1) * per_page).limit(per_page)
+        if where is not None:
+            total_stmt = total_stmt.where(where)
+            items_stmt = items_stmt.where(where)
+
         total_result = await self.session.execute(total_stmt)
         total = total_result.scalar() or 0
 
         pages = max(1, math.ceil(total / per_page))
-        skip = (page - 1) * per_page
 
-        stmt = select(self.model).offset(skip).limit(per_page)
-        result = await self.session.execute(stmt)
+        result = await self.session.execute(items_stmt)
         items = result.scalars().all()
 
         return Page(

@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import get_current_user
 from app.core.security import create_access_token, hash_password, verify_password
 from app.database import get_db
+from app.models.user import UserModel
 from app.repositories.user import UserRepository
-from app.schemas.auth import Token, UserCreate, UserLogin
+from app.schemas.auth import Token, UserCreate, UserLogin, UserOut
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -40,3 +42,8 @@ async def login(
             detail="Incorrect email or password",
         )
     return Token(access_token=create_access_token(user.id))
+
+
+@router.get("/me", response_model=UserOut)
+async def me(user: UserModel = Depends(get_current_user)):
+    return user

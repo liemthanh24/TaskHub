@@ -16,5 +16,10 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 60
 
+    ADMIN_EMAIL: str = ""
+    ADMIN_PASSWORD: str = ""
+
+    REDIS_URL: str = ""
+
 settings = Settings()
 
