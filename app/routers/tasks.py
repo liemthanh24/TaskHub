@@ -1,10 +1,9 @@
-import logging
-
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user, require_role
 from app.core.cache import cache
+from app.core.queue import task_queue
 from app.database import get_db
 from app.models.user import UserModel
 from app.repositories.task import TaskRepository
@@ -13,15 +12,10 @@ from app.schemas.task import Page, Task, TaskCreate, TaskUpdate
 router = APIRouter(prefix="/tasks", tags=["tasks"])
 
 CACHE_TTL = 60
-logger = logging.getLogger("taskhub.action")
 
 
 def get_repo(db: AsyncSession = Depends(get_db)) -> TaskRepository:
     return TaskRepository(db)
-
-
-def log_action(action: str, task_id: int | None, user_id: int):
-    logger.info("action=%s task_id=%s user_id=%s", action, task_id, user_id)
 
 
 async def invalidate_task_cache():
@@ -31,7 +25,19 @@ async def invalidate_task_cache():
             await cache.delete(*keys)
 
 
-@router.get("/all", response_model=list[Task])
+async def _enqueue_action(request: Request, action: str, task_id: int | None, user_id: int):
+    return await task_queue.enqueue(
+        {
+            "type": "action_log",
+            "action": action,
+            "task_id": task_id,
+            "user_id": user_id,
+            "request_id": request.state.request_id,
+        }
+    )
+
+
+@router.get("/all", response_model=list[Task], summary="Danh sách toàn bộ task (admin)")
 async def list_all_tasks(
     admin: UserModel = Depends(require_role("admin")),
     repo: TaskRepository = Depends(get_repo),
@@ -44,7 +50,7 @@ async def list_all_tasks(
     return tasks
 
 
-@router.get("/", response_model=list[Task])
+@router.get("/", response_model=list[Task], summary="Danh sách task của user hiện tại")
 async def list_tasks(
     user: UserModel = Depends(get_current_user),
     repo: TaskRepository = Depends(get_repo),
@@ -57,7 +63,7 @@ async def list_tasks(
     return tasks
 
 
-@router.get("/page", response_model=Page)
+@router.get("/page", response_model=Page, summary="Phân trang task của user hiện tại")
 async def paginate_tasks(
     page: int = Query(1, ge=1),
     per_page: int = Query(10, ge=1, le=100),
@@ -79,7 +85,7 @@ async def paginate_tasks(
     return payload
 
 
-@router.get("/{task_id}", response_model=Task)
+@router.get("/{task_id}", response_model=Task, summary="Chi tiết một task")
 async def get_task(
     task_id: int,
     user: UserModel = Depends(get_current_user),
@@ -98,24 +104,24 @@ async def get_task(
     return task
 
 
-@router.post("/", response_model=Task, status_code=status.HTTP_201_CREATED)
+@router.post("/", response_model=Task, status_code=status.HTTP_201_CREATED, summary="Tạo task mới")
 async def create_task(
     payload: TaskCreate,
-    background_tasks: BackgroundTasks,
+    request: Request,
     user: UserModel = Depends(get_current_user),
     repo: TaskRepository = Depends(get_repo),
 ):
     task = await repo.create(user_id=user.id, **payload.model_dump())
     await invalidate_task_cache()
-    background_tasks.add_task(log_action, "create", task.id, user.id)
+    await _enqueue_action(request, "create", task.id, user.id)
     return task
 
 
-@router.put("/{task_id}", response_model=Task)
+@router.put("/{task_id}", response_model=Task, summary="Cập nhật task")
 async def update_task(
     task_id: int,
     payload: TaskUpdate,
-    background_tasks: BackgroundTasks,
+    request: Request,
     user: UserModel = Depends(get_current_user),
     repo: TaskRepository = Depends(get_repo),
 ):
@@ -127,14 +133,14 @@ async def update_task(
     if not task:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
     await invalidate_task_cache()
-    background_tasks.add_task(log_action, "update", task.id, user.id)
+    await _enqueue_action(request, "update", task.id, user.id)
     return task
 
 
-@router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
+@router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Xóa task")
 async def delete_task(
     task_id: int,
-    background_tasks: BackgroundTasks,
+    request: Request,
     user: UserModel = Depends(get_current_user),
     repo: TaskRepository = Depends(get_repo),
 ):
@@ -146,4 +152,4 @@ async def delete_task(
     if not deleted:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Task not found")
     await invalidate_task_cache()
-    background_tasks.add_task(log_action, "delete", task_id, user.id)
+    await _enqueue_action(request, "delete", task_id, user.id)

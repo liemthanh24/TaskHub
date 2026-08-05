@@ -23,12 +23,35 @@ class Page(BaseModel):
 
 
 class TaskCreate(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "title": "Học FastAPI",
+                    "description": "Hoàn thành chương 5",
+                    "due_date": "2026-08-10T18:00:00Z",
+                }
+            ]
+        }
+    )
+
     title: str
     description: str | None = None
     due_date: datetime | None = None
 
 
 class TaskUpdate(BaseModel):
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "title": "Học FastAPI nâng cao",
+                    "completed": True,
+                }
+            ]
+        }
+    )
+
     title: str | None = None
     description: str | None = None
     due_date: datetime | None = None

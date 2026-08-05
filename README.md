@@ -5,11 +5,12 @@ Hệ thống quản lý công việc (Task Management API) — dự án học t�
 ## Tech Stack
 
 - **Framework:** FastAPI + Pydantic v2
-- **Database:** SQLAlchemy 2.x (async) + SQLite/aiosqlite (dev)
+- **Database:** SQLAlchemy 2.x (async) + SQLite/aiosqlite (dev) / PostgreSQL/asyncpg (prod, Docker)
 - **Migration:** Alembic
 - **Auth:** JWT (HS256, python-jose) + password hashing (passlib/bcrypt)
 - **Cache:** fakeredis (in-memory, khi `REDIS_URL` rỗng) / Redis thật (khi set `REDIS_URL`)
-- **Config:** pydantic-settings (`.env`)
+- **Config:** pydantic-settings (multi-env theo `APP_ENV`)
+- **Queue:** in-process asyncio queue (job log hành động)
 - **Python:** 3.12
 
 ## Features
@@ -23,6 +24,11 @@ Hệ thống quản lý công việc (Task Management API) — dự án học t�
 | 5 | Authorization & RBAC (roles admin/user, task ownership) | ✅ |
 | 6 | Middleware (CORS, request-id, timing) + exception handler | ✅ |
 | 7 | Caching (Redis/fakeredis) + Background Tasks | ✅ |
+| 8 | API Documentation (OpenAPI tags, summaries, examples) | ✅ |
+| 9 | Fail-fast env validation + multi-environment | ✅ |
+| 10 | Request-ID logging | ✅ |
+| 11 | In-process async queue | ✅ |
+| 12 | Docker (multi-stage, app + Postgres + Redis) | ✅ |
 
 ## API Endpoints
 
@@ -60,7 +66,39 @@ copy .env.example .env          # Windows (hoặc cp .env.example .env trên Lin
 python -m app.main              # chạy app (uvicorn nếu cần)
 ```
 
-> **Bắt buộc:** set `JWT_SECRET` trong production (`DEBUG=false`). App sẽ từ chối khởi động nếu dùng secret mặc định khi không ở chế độ debug.
+## Cấu hình môi trường (Multi-env)
+
+Cấu hình qua `APP_ENV` (dev/test/prod) — app sẽ load file env tương ứng:
+
+| APP_ENV | File env | Mục đích |
+|---------|----------|----------|
+| `dev` | `.env.dev` | Phát triển local (SQLite, DEBUG=true) |
+| `test` | `.env.test` | Chạy test |
+| `prod` | `.env.prod` | Production (bắt buộc secret, Postgres) |
+
+Nếu file tương ứng chưa tồn tại, app fallback về `.env`. Template: `.env.example`, `.env.dev.example`, `.env.prod.example`.
+
+> **Fail-fast:** khi `APP_ENV=prod`, app từ chối khởi động nếu thiếu `JWT_SECRET` (khác default), `DATABASE_URL` (không phải SQLite) hoặc `ADMIN_PASSWORD`.
+
+## API Documentation
+
+Truy cập Swagger UI tại `/docs`, ReDoc tại `/redoc`, schema tại `/openapi.json`.
+
+## Logging
+
+Mỗi log record chứa `request_id` để truy vết theo request (header `X-Request-ID` hoặc tự sinh UUID). Format: `time | level | logger | request_id | message`.
+
+## Chạy với Docker
+
+```bash
+docker compose up --build
+```
+
+Khởi động 3 service: `web` (FastAPI), `db` (PostgreSQL 16), `redis` (Redis 7). Bắt buộc set `JWT_SECRET`, `ADMIN_PASSWORD` trong environment khi chạy prod.
+
+```bash
+JWT_SECRET=$(openssl rand -hex 32) ADMIN_PASSWORD=strongpass docker compose up --build
+```
 
 ## Migrations
 
@@ -75,20 +113,22 @@ alembic upgrade head
 python -m pytest tests/ -q
 ```
 
-75 tests (day1–day5): health, CRUD, auth, RBAC/ownership, middleware, cache (hit/miss/invalidate), background tasks.
+95 tests (day1–day6): health, CRUD, auth, RBAC/ownership, middleware, cache (hit/miss/invalidate), background tasks/queue, config fail-fast, API docs, request-id logging.
 
 ## Cấu trúc
 
 ```
 app/
 ├── api/deps.py          # get_current_user, require_role
-├── core/                # config, security (JWT/bcrypt), logging, cache
+├── core/                # config, security (JWT/bcrypt), logging, cache, queue
 ├── database.py          # engine, session, init_db
 ├── models/              # SQLAlchemy models (base, task, user)
 ├── repositories/        # Repository Pattern (base, task, user)
 ├── routers/             # auth, health, tasks
 └── schemas/             # pydantic (auth, task)
 alembic/                 # migrations
-tests/day1..day5/        # pytest suites
+tests/day1..day6/        # pytest suites
 plans/                   # phase plans
+Dockerfile               # multi-stage build
+docker-compose.yml       # web + db (Postgres) + redis
 ```

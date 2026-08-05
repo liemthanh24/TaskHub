@@ -8,21 +8,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from app.core.config import settings
-from app.core.logging import setup_logging
+from app.core.logging import request_id_var, setup_logging
+from app.core.queue import task_queue
 from app.core.security import hash_password
 from app.database import AsyncSessionLocal, engine, init_db
 from app.repositories.user import UserRepository
 from app.routers import auth, health, tasks
 
 logger = logging.getLogger(__name__)
-
-
-def _guard_settings():
-    if not settings.DEBUG and settings.JWT_SECRET == "change-me-in-production":
-        raise RuntimeError(
-            "JWT_SECRET must be set in production (DEBUG=False). "
-            "Do not run with the default secret."
-        )
 
 
 async def seed_admin():
@@ -42,16 +35,32 @@ async def seed_admin():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     setup_logging()
-    logger.info("Starting %s v%s", settings.APP_NAME, settings.APP_VERSION)
+    logger.info("Starting %s v%s (env=%s)", settings.APP_NAME, settings.APP_VERSION, settings.APP_ENV)
     await init_db()
     await seed_admin()
+    task_queue.start()
     yield
+    await task_queue.stop()
     await engine.dispose()
 
 
-app = FastAPI(title=settings.APP_NAME, version=settings.APP_VERSION, lifespan=lifespan)
+OPENAPI_TAGS = [
+    {"name": "auth", "description": "Đăng ký, đăng nhập và thông tin user hiện tại."},
+    {"name": "tasks", "description": "Quản lý công việc (CRUD) — yêu cầu JWT, có kiểm soát ownership."},
+    {"name": "health", "description": "Kiểm tra trạng thái dịch vụ."},
+]
 
-_guard_settings()
+app = FastAPI(
+    title=settings.APP_NAME,
+    version=settings.APP_VERSION,
+    description=(
+        "Hệ thống quản lý công việc (TaskHub API) — API học tập production-ready. "
+        "Hỗ trợ JWT auth, RBAC, caching, background queue, request-id logging."
+    ),
+    summary="TaskHub Task Management API",
+    openapi_tags=OPENAPI_TAGS,
+    lifespan=lifespan,
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -66,11 +75,15 @@ app.add_middleware(
 async def add_request_context(request: Request, call_next):
     request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
     request.state.request_id = request_id
+    token = request_id_var.set(request_id)
     start = time.perf_counter()
-    response = await call_next(request)
-    duration_ms = (time.perf_counter() - start) * 1000
-    response.headers["X-Request-ID"] = request_id
-    response.headers["X-Process-Time-Ms"] = f"{duration_ms:.1f}"
+    try:
+        response = await call_next(request)
+        duration_ms = (time.perf_counter() - start) * 1000
+        response.headers["X-Request-ID"] = request_id
+        response.headers["X-Process-Time-Ms"] = f"{duration_ms:.1f}"
+    finally:
+        request_id_var.reset(token)
     return response
 
 
