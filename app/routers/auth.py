@@ -15,7 +15,13 @@ def get_repo(db: AsyncSession = Depends(get_db)) -> UserRepository:
     return UserRepository(db)
 
 
-@router.post("/register", response_model=Token, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/register",
+    response_model=Token,
+    status_code=status.HTTP_201_CREATED,
+    summary="Đăng ký tài khoản mới",
+    description="Tạo user thường (role=user) và trả về JWT. Không chấp nhận role từ client.",
+)
 async def register(
     payload: UserCreate,
     repo: UserRepository = Depends(get_repo),
@@ -30,7 +36,7 @@ async def register(
     return Token(access_token=create_access_token(user.id))
 
 
-@router.post("/login", response_model=Token)
+@router.post("/login", response_model=Token, summary="Đăng nhập", description="Xác thực email + password, trả về JWT.")
 async def login(
     payload: UserLogin,
     repo: UserRepository = Depends(get_repo),
@@ -44,6 +50,6 @@ async def login(
     return Token(access_token=create_access_token(user.id))
 
 
-@router.get("/me", response_model=UserOut)
+@router.get("/me", response_model=UserOut, summary="Thông tin user hiện tại", description="Yêu cầu header Authorization: Bearer <token>.")
 async def me(user: UserModel = Depends(get_current_user)):
     return user

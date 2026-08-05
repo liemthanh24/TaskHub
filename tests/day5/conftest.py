@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.core.cache import cache
 from app.core.config import settings
+from app.core.queue import task_queue
 from app.core.security import create_access_token, hash_password
 from app.database import AsyncSessionLocal, engine, init_db
 from app.main import app
@@ -19,6 +20,7 @@ def _flush_cache():
 
 @pytest.fixture(autouse=True)
 def clean_state():
+    asyncio.run(task_queue.reset())
     asyncio.run(init_db())
     _flush_cache()
     yield
@@ -26,12 +28,14 @@ def clean_state():
         async with engine.begin() as conn:
             await conn.run_sync(Base.metadata.drop_all)
     asyncio.run(_cleanup())
+    asyncio.run(task_queue.reset())
     _flush_cache()
 
 
 @pytest.fixture
 def client():
-    return TestClient(app)
+    with TestClient(app) as c:
+        yield c
 
 
 def register(client: TestClient, email: str = "user@example.com") -> str:

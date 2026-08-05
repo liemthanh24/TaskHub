@@ -7,11 +7,13 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 
 from alembic import context
 
+from app.core.config import settings
 from app.models.base import Base
 from app.models.task import TaskModel
 from app.models.user import UserModel
 
 config = context.config
+config.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
