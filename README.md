@@ -29,6 +29,18 @@ Hệ thống quản lý công việc (Task Management API) — dự án học t�
 | 10 | Request-ID logging | ✅ |
 | 11 | In-process async queue | ✅ |
 | 12 | Docker (multi-stage, app + Postgres + Redis) | ✅ |
+| 13 | Code quality: Ruff (lint) + Mypy (type check) + DRY refactor | ✅ |
+
+## Lint & Type Checking
+
+```bash
+ruff check .               # 0 findings
+mypy app/                  # 0 errors
+```
+
+- **Ruff** (`[tool.ruff]`): target py312, line-length 100, rules `E,F,I,UP,B,SIM`. `alembic/` (migration autogen) được exclude; `tests/**` bỏ rule `E501`; `Depends`/`Query`/`require_role` khai báo immutable (pattern FastAPI chuẩn, không bị B008).
+- **Mypy** (`[tool.mypy]`): check `app/` với `check_untyped_defs` + `disallow_untyped_defs`.
+- Refactor DRY: pattern cache-get → serialize → cache-set gộp thành helper `_cached_value` + `_serialize_task` trong `app/routers/tasks.py`.
 
 ## API Endpoints
 
@@ -62,8 +74,15 @@ Hệ thống quản lý công việc (Task Management API) — dự án học t�
 python -m venv .venv
 .venv\Scripts\activate          # Windows
 pip install -r requirements.txt
-copy .env.example .env          # Windows (hoặc cp .env.example .env trên Linux)
 python -m app.main              # chạy app (uvicorn nếu cần)
+```
+
+Dev-only tools (đã có trong `pyproject.toml` optional-dependencies `dev`):
+
+```bash
+pip install -e ".[dev]"
+ruff check .
+mypy app/
 ```
 
 ## Cấu hình môi trường (Multi-env)
@@ -111,9 +130,11 @@ alembic upgrade head
 
 ```bash
 python -m pytest tests/ -q
+ruff check .                 # lint: 0 findings
+mypy app/                    # type check: 0 errors
 ```
 
-95 tests (day1–day6): health, CRUD, auth, RBAC/ownership, middleware, cache (hit/miss/invalidate), background tasks/queue, config fail-fast, API docs, request-id logging.
+103 tests (day1–day7): health, CRUD, auth, RBAC/ownership, middleware, cache (hit/miss/invalidate), background tasks/queue, config fail-fast, API docs, request-id logging, code-quality (imports clean, API contract ổn định, dead code đã xóa).
 
 ## Cấu trúc
 
@@ -127,8 +148,17 @@ app/
 ├── routers/             # auth, health, tasks
 └── schemas/             # pydantic (auth, task)
 alembic/                 # migrations
-tests/day1..day6/        # pytest suites
+tests/day1..day7/        # pytest suites
 plans/                   # phase plans
 Dockerfile               # multi-stage build
 docker-compose.yml       # web + db (Postgres) + redis
 ```
+
+## Mục tiêu học tập (Roadmap)
+
+- [x] **Day 1–2:** FastAPI setup, health check, SQLAlchemy async + Repository Pattern + Alembic
+- [x] **Day 3:** Config đa môi trường, structured logging, JWT auth
+- [x] **Day 4:** RBAC + ownership
+- [x] **Day 5:** Middleware, caching, background queue
+- [x] **Day 6:** Docker Compose + API documentation nâng cao
+- [x] **Day 7:** Code quality — Ruff + Mypy, xóa dead code, DRY refactor, performance review

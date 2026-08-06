@@ -1,3 +1,5 @@
+from collections.abc import Awaitable, Callable
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -14,19 +16,19 @@ async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: AsyncSession = Depends(get_db),
 ) -> UserModel:
-    user_id = decode_access_token(credentials.credentials)
-    if user_id is None:
+    raw_user_id = decode_access_token(credentials.credentials)
+    if raw_user_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
         )
     try:
-        user_id = int(user_id)
+        user_id = int(raw_user_id)
     except ValueError:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
-        )
+        ) from None
     user = await UserRepository(db).get(user_id)
     if user is None or not user.is_active:
         raise HTTPException(
@@ -36,7 +38,7 @@ async def get_current_user(
     return user
 
 
-def require_role(*roles: str):
+def require_role(*roles: str) -> Callable[..., Awaitable[UserModel]]:
     async def checker(user: UserModel = Depends(get_current_user)) -> UserModel:
         if user.role not in roles:
             raise HTTPException(

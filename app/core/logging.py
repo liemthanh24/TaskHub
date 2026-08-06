@@ -13,7 +13,7 @@ class RequestIdFilter(logging.Filter):
         return True
 
 
-def setup_logging():
+def setup_logging() -> None:
     root = logging.getLogger()
     if root.handlers:
         for handler in root.handlers:

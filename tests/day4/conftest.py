@@ -34,7 +34,11 @@ def client():
     return TestClient(app)
 
 
-def register(client: TestClient, email: str = "user@example.com", password: str = "secret123") -> str:
+def register(
+    client: TestClient,
+    email: str = "user@example.com",
+    password: str = "secret123",
+) -> str:
     resp = client.post("/auth/register", json={"email": email, "password": password})
     assert resp.status_code == 201, resp.text
     return resp.json()["access_token"]
@@ -46,7 +50,11 @@ def create_admin_token(email: str = "admin@example.com") -> str:
     async def _make():
         async with AsyncSessionLocal() as session:
             repo = UserRepository(session)
-            user = await repo.create(email=email, hashed_password=hash_password("secret123"), role="admin")
+            user = await repo.create(
+                email=email,
+                hashed_password=hash_password("secret123"),
+                role="admin",
+            )
             return user.id
     user_id = asyncio.run(_make())
     return create_access_token(user_id)

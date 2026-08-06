@@ -1,4 +1,3 @@
-import pytest
 from app.repositories.task import TaskRepository
 
 

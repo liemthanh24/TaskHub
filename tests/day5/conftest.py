@@ -6,11 +6,9 @@ from fastapi.testclient import TestClient
 from app.core.cache import cache
 from app.core.config import settings
 from app.core.queue import task_queue
-from app.core.security import create_access_token, hash_password
-from app.database import AsyncSessionLocal, engine, init_db
+from app.database import engine, init_db
 from app.main import app
 from app.models.base import Base
-from app.repositories.user import UserRepository
 
 
 def _flush_cache():

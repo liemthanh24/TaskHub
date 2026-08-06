@@ -43,7 +43,11 @@ def admin_token(client: TestClient) -> str:
     async def _make():
         async with AsyncSessionLocal() as session:
             repo = UserRepository(session)
-            user = await repo.create(email="admin@example.com", hashed_password=hash_password("secret123"), role="admin")
+            user = await repo.create(
+                email="admin@example.com",
+                hashed_password=hash_password("secret123"),
+                role="admin",
+            )
             return user.id
     user_id = asyncio.run(_make())
     return create_access_token(user_id)
