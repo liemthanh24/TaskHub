@@ -1,5 +1,5 @@
 import os
-from typing import Literal
+from typing import Any, Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -53,7 +53,7 @@ class Settings(BaseSettings):
 
     REDIS_URL: str = ""
 
-    def validate(self) -> None:
+    def _validate(self) -> None:
         errors: list[str] = []
         if self.JWT_EXPIRE_MINUTES <= 0:
             errors.append("JWT_EXPIRE_MINUTES must be a positive integer")
@@ -69,9 +69,9 @@ class Settings(BaseSettings):
         if errors:
             raise RuntimeError("Invalid settings: " + "; ".join(errors))
 
-    def __init__(self, **kwargs):
+    def __init__(self, **kwargs: Any):
         super().__init__(**kwargs)
-        self.validate()
+        self._validate()
 
 
 settings = Settings()

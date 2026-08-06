@@ -1,4 +1,3 @@
-import pytest
 
 from tests.day1.conftest import auth_headers, register
 

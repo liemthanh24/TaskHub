@@ -1,4 +1,5 @@
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -11,7 +12,7 @@ class Task(BaseModel):
     description: str | None = None
     due_date: datetime | None = None
     completed: bool = False
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
 
 
 class Page(BaseModel):

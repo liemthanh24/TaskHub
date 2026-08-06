@@ -1,9 +1,10 @@
 import logging
 import time
 import uuid
+from collections.abc import AsyncGenerator, Awaitable, Callable
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -18,7 +19,7 @@ from app.routers import auth, health, tasks
 logger = logging.getLogger(__name__)
 
 
-async def seed_admin():
+async def seed_admin() -> None:
     if not (settings.ADMIN_EMAIL and settings.ADMIN_PASSWORD):
         return
     async with AsyncSessionLocal() as session:
@@ -33,9 +34,14 @@ async def seed_admin():
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     setup_logging()
-    logger.info("Starting %s v%s (env=%s)", settings.APP_NAME, settings.APP_VERSION, settings.APP_ENV)
+    logger.info(
+        "Starting %s v%s (env=%s)",
+        settings.APP_NAME,
+        settings.APP_VERSION,
+        settings.APP_ENV,
+    )
     await init_db()
     await seed_admin()
     task_queue.start()
@@ -46,7 +52,13 @@ async def lifespan(app: FastAPI):
 
 OPENAPI_TAGS = [
     {"name": "auth", "description": "Đăng ký, đăng nhập và thông tin user hiện tại."},
-    {"name": "tasks", "description": "Quản lý công việc (CRUD) — yêu cầu JWT, có kiểm soát ownership."},
+    {
+        "name": "tasks",
+        "description": (
+            "Quản lý công việc (CRUD) — yêu cầu JWT, "
+            "có kiểm soát ownership."
+        ),
+    },
     {"name": "health", "description": "Kiểm tra trạng thái dịch vụ."},
 ]
 
@@ -72,7 +84,10 @@ app.add_middleware(
 
 
 @app.middleware("http")
-async def add_request_context(request: Request, call_next):
+async def add_request_context(
+    request: Request,
+    call_next: Callable[[Request], Awaitable[Response]],
+) -> Response:
     request_id = request.headers.get("X-Request-ID") or str(uuid.uuid4())
     request.state.request_id = request_id
     token = request_id_var.set(request_id)
@@ -88,7 +103,7 @@ async def add_request_context(request: Request, call_next):
 
 
 @app.exception_handler(Exception)
-async def unhandled_exception_handler(request: Request, exc: Exception):
+async def unhandled_exception_handler(request: Request, exc: Exception) -> JSONResponse:
     logger.exception("Unhandled error on %s %s", request.method, request.url.path)
     return JSONResponse(
         status_code=500,

@@ -16,6 +16,6 @@ async def get_db() -> AsyncGenerator[AsyncSession, None]:
         yield session
 
 
-async def init_db():
+async def init_db() -> None:
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)

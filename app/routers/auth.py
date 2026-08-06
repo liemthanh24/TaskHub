@@ -25,10 +25,13 @@ def get_repo(db: AsyncSession = Depends(get_db)) -> UserRepository:
 async def register(
     payload: UserCreate,
     repo: UserRepository = Depends(get_repo),
-):
+) -> Token:
     existing = await repo.get_by_email(payload.email)
     if existing:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Email already registered",
+        )
     user = await repo.create(
         email=payload.email,
         hashed_password=hash_password(payload.password),
@@ -36,11 +39,16 @@ async def register(
     return Token(access_token=create_access_token(user.id))
 
 
-@router.post("/login", response_model=Token, summary="Đăng nhập", description="Xác thực email + password, trả về JWT.")
+@router.post(
+    "/login",
+    response_model=Token,
+    summary="Đăng nhập",
+    description="Xác thực email + password, trả về JWT.",
+)
 async def login(
     payload: UserLogin,
     repo: UserRepository = Depends(get_repo),
-):
+) -> Token:
     user = await repo.get_by_email(payload.email)
     if not user or not verify_password(payload.password, user.hashed_password):
         raise HTTPException(
@@ -50,6 +58,11 @@ async def login(
     return Token(access_token=create_access_token(user.id))
 
 
-@router.get("/me", response_model=UserOut, summary="Thông tin user hiện tại", description="Yêu cầu header Authorization: Bearer <token>.")
-async def me(user: UserModel = Depends(get_current_user)):
+@router.get(
+    "/me",
+    response_model=UserOut,
+    summary="Thông tin user hiện tại",
+    description="Yêu cầu header Authorization: Bearer <token>.",
+)
+async def me(user: UserModel = Depends(get_current_user)) -> UserModel:
     return user

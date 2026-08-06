@@ -1,5 +1,6 @@
 import asyncio
 import logging
+from contextlib import suppress
 
 from app.core.logging import request_id_var
 
@@ -55,10 +56,8 @@ class TaskQueue:
         if self._worker_task is None:
             return
         self._worker_task.cancel()
-        try:
+        with suppress(asyncio.CancelledError):
             await self._worker_task
-        except asyncio.CancelledError:
-            pass
         self._worker_task = None
         logger.info("Queue worker stopped")
 
@@ -66,10 +65,8 @@ class TaskQueue:
         """Cancel any running worker and clear queued jobs (test isolation)."""
         if self._worker_task is not None:
             self._worker_task.cancel()
-            try:
+            with suppress(asyncio.CancelledError):
                 await self._worker_task
-            except asyncio.CancelledError:
-                pass
             self._worker_task = None
         self._queue = asyncio.Queue(maxsize=self._maxsize)
 
